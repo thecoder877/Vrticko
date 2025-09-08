@@ -1,35 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
-console.log("📢 ENV KEYS RAW:", import.meta.env);
 
-console.log("📢 ENV CONTENTS:", import.meta.env);
-console.log("📢 SUPABASE URL:", import.meta.env.VITE_SUPABASE_URL);
-console.log("📢 SUPABASE ANON KEY:", import.meta.env.VITE_SUPABASE_ANON_KEY);
-console.log("📢 SUPABASE SERVICE ROLE KEY:", import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY);
-console.log("📢 VITE_SOME_KEY =", import.meta.env.VITE_SOME_KEY)
-if (!import.meta.env.VITE_SUPABASE_URL) {
-  throw new Error("❌ VITE_SUPABASE_URL nije definisan u .env");
-}
-if (!import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  throw new Error("❌ VITE_SUPABASE_ANON_KEY nije definisan u .env");
+// Uzmi iz Vite env-a, očisti razmake i skini završni /
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? '').trim().replace(/\/$/, '')
+const SUPABASE_ANON_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim()
+
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  // Ovo puca rano i jasno u build/runtime ako env nije dobar
+  throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY')
 }
 
-export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY,
-  {
-    auth: { storageKey: 'vrticko-regular-client' },
-  }
-)
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  global: {
+    headers: { 'x-client-info': 'vrticko-web' },
+  },
+})
 
-export const supabaseAdmin = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-      storageKey: 'vrticko-admin-client',
-      detectSessionInUrl: false,
-    },
-  }
-)
+// Pomoćni log (samo u browseru, i samo jednom)
+if (typeof window !== 'undefined' && !(window as any).__VRT_SUPABASE_LOGGED__) {
+  console.log('[VRTICKO] Supabase URL:', SUPABASE_URL)
+  ;(window as any).__VRT_SUPABASE_LOGGED__ = true
+}
