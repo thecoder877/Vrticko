@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { UserPlus, Users } from 'lucide-react'
-import { createUserAdmin } from '../utils/adminUsers' // ✅ koristi Edge funkciju
+import { createUserAdmin } from '../utils/adminUsers' // ✅ koristimo Edge funkciju preko utila
 
 const UserManagement: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -9,7 +9,7 @@ const UserManagement: React.FC = () => {
     password: '',
     username: '',
     full_name: '',
-    role: 'parent' as 'parent' | 'teacher' | 'admin'
+    role: 'parent' as 'parent' | 'teacher' | 'admin',
   })
   const [loading, setLoading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -20,7 +20,6 @@ const UserManagement: React.FC = () => {
     setMessage(null)
 
     try {
-      // ✅ pozovi Edge funkciju (service role na serveru)
       const res = await createUserAdmin({
         email: newUser.email.trim(),
         password: newUser.password,
@@ -57,9 +56,7 @@ const UserManagement: React.FC = () => {
           <h3 className="text-lg font-semibold mb-4">Kreiraj novog korisnika</h3>
           <form onSubmit={createUser} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
                 type="email"
                 value={newUser.email}
@@ -70,9 +67,7 @@ const UserManagement: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Lozinka
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Lozinka</label>
               <input
                 type="password"
                 value={newUser.password}
@@ -84,9 +79,7 @@ const UserManagement: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Korisničko ime
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Korisničko ime</label>
               <input
                 type="text"
                 value={newUser.username}
@@ -97,9 +90,7 @@ const UserManagement: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ime i prezime (opciono)
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Ime i prezime (opciono)</label>
               <input
                 type="text"
                 value={newUser.full_name}
@@ -110,9 +101,7 @@ const UserManagement: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Uloga
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Uloga</label>
               <select
                 value={newUser.role}
                 onChange={(e) =>
