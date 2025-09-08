@@ -25,32 +25,26 @@ const SendNotificationsPage: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      // Fetch children
       const { data: childrenData, error: childrenError } = await supabase
         .from('children')
         .select('*')
         .order('name')
-
       if (childrenError) throw childrenError
       setChildren(childrenData || [])
 
-      // Fetch parents
       const { data: parentsData, error: parentsError } = await supabase
         .from('users')
         .select('*')
         .eq('role', 'parent')
         .order('username')
-
       if (parentsError) throw parentsError
       setParents(parentsData || [])
 
-      // Fetch teachers
       const { data: teachersData, error: teachersError } = await supabase
         .from('users')
         .select('*')
         .eq('role', 'teacher')
         .order('username')
-
       if (teachersError) throw teachersError
       setTeachers(teachersData || [])
     } catch (error) {
@@ -62,12 +56,13 @@ const SendNotificationsPage: React.FC = () => {
 
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault()
+
     if (!notification.title.trim() || !notification.message.trim()) {
       alert('Molimo unesite naslov i poruku')
       return
     }
 
-    // For individual notifications, check if a parent or teacher is selected
+    // Provera za individual
     if (notification.target === 'individual') {
       if (user?.role === 'parent' && !selectedTeacherId) {
         alert('Molimo izaberite vaspitača za individualno obaveštenje')
@@ -80,57 +75,37 @@ const SendNotificationsPage: React.FC = () => {
 
     try {
       setSending(true)
-      
-      // For individual notifications, use the selected parent or teacher ID
-      let targetValue = notification.target
-      if (notification.target === 'individual') {
-        if (user?.role === 'parent') {
-          targetValue = selectedTeacherId
-        } else {
-          targetValue = selectedParentId
-        }
-      }
-      
-      // Save notification to database
-      const { error } = await supabase
-        .from('notifications')
-        .insert({
-          title: notification.title,
-          message: notification.message,
-          target: targetValue,
-          created_by: (await supabase.auth.getUser()).data.user?.id
-        })
 
-      if (error) throw error
+      const isIndividual = notification.target === 'individual'
+      const individualUserId =
+        user?.role === 'parent' ? selectedTeacherId : selectedParentId
 
-      // Send push notification
-      try {
-        const pushTarget = notification.target === 'individual' ? targetValue : notification.target
-        const { error: pushError } = await supabase.functions.invoke('send-push-notification', {
+      // ❗️NEMA više .from('notifications').insert(...)
+      // Sve radi edge funkcija: upis u notifications + push
+      const { error: fnError } = await supabase.functions.invoke(
+        'send-push-notification',
+        {
           body: {
             title: notification.title,
             message: notification.message,
             icon: '/icon-192x192.png',
             badge: '/badge-72x72.png',
-            userId: pushTarget === 'individual' ? targetValue : undefined,
-            target: pushTarget === 'individual' ? undefined : pushTarget
+            // Ako je individual -> šalji userId; inače target (all/parents/teachers)
+            userId: isIndividual ? individualUserId : undefined,
+            target: isIndividual ? undefined : notification.target
           }
-        })
-
-        if (pushError) {
-          console.warn('Push notification failed:', pushError)
-          // Don't fail the whole operation if push fails
         }
-      } catch (pushError) {
-        console.warn('Push notification error:', pushError)
-        // Don't fail the whole operation if push fails
+      )
+
+      if (fnError) {
+        console.warn('Push/edge error:', fnError)
+        throw fnError
       }
 
       setMessage('Obaveštenje je uspešno poslato!')
       setNotification({ title: '', message: '', target: 'all' })
       setSelectedParentId('')
-      
-      // Clear success message after 3 seconds
+      setSelectedTeacherId('')
       setTimeout(() => setMessage(''), 3000)
     } catch (error) {
       console.error('Error sending notification:', error)
@@ -143,14 +118,18 @@ const SendNotificationsPage: React.FC = () => {
 
   const getTargetDescription = (target: string) => {
     switch (target) {
-      case 'all': return 'Svi korisnici (roditelji, vaspitači, administracija)'
-      case 'parents': return 'Svi roditelji'
-      case 'teachers': return 'Svi vaspitači'
-      case 'individual': 
-        return user?.role === 'parent' 
+      case 'all':
+        return 'Svi korisnici (roditelji, vaspitači, administracija)'
+      case 'parents':
+        return 'Svi roditelji'
+      case 'teachers':
+        return 'Svi vaspitači'
+      case 'individual':
+        return user?.role === 'parent'
           ? 'Individualno obaveštenje izabranom vaspitaču'
           : 'Individualno obaveštenje izabranom roditelju'
-      default: return 'Individualno obaveštenje'
+      default:
+        return 'Individualno obaveštenje'
     }
   }
 
@@ -170,26 +149,25 @@ const SendNotificationsPage: React.FC = () => {
             {user?.role === 'parent' ? 'Kontakt vaspitača' : 'Slanje obaveštenja'}
           </h1>
           <p className="text-gray-600">
-            {user?.role === 'parent' 
-              ? 'Pošaljite poruku vaspitačima' 
-              : 'Masovna i individualna obaveštenja roditeljima'
-            }
+            {user?.role === 'parent'
+              ? 'Pošaljite poruku vaspitačima'
+              : 'Masovna i individualna obaveštenja roditeljima'}
           </p>
         </div>
 
-        {/* Message Display */}
         {message && (
-          <div className={`mb-6 p-4 rounded-lg ${
-            message.includes('uspešno') 
-              ? 'bg-green-50 text-green-700 border border-green-200' 
-              : 'bg-red-50 text-red-700 border border-red-200'
-          }`}>
+          <div
+            className={`mb-6 p-4 rounded-lg ${
+              message.includes('uspešno')
+                ? 'bg-green-50 text-green-700 border border-green-200'
+                : 'bg-red-50 text-red-700 border border-red-200'
+            }`}
+          >
             {message}
           </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Send Notification Form */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center mb-6">
               <Send className="w-6 h-6 text-blue-600 mr-2" />
@@ -204,7 +182,9 @@ const SendNotificationsPage: React.FC = () => {
                 <input
                   type="text"
                   value={notification.title}
-                  onChange={(e) => setNotification({ ...notification, title: e.target.value })}
+                  onChange={(e) =>
+                    setNotification({ ...notification, title: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Unesite naslov obaveštenja"
                   required
@@ -217,7 +197,9 @@ const SendNotificationsPage: React.FC = () => {
                 </label>
                 <textarea
                   value={notification.message}
-                  onChange={(e) => setNotification({ ...notification, message: e.target.value })}
+                  onChange={(e) =>
+                    setNotification({ ...notification, message: e.target.value })
+                  }
                   rows={4}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Unesite poruku obaveštenja"
@@ -231,7 +213,9 @@ const SendNotificationsPage: React.FC = () => {
                 </label>
                 <select
                   value={notification.target}
-                  onChange={(e) => setNotification({ ...notification, target: e.target.value })}
+                  onChange={(e) =>
+                    setNotification({ ...notification, target: e.target.value })
+                  }
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {user?.role === 'parent' ? (
@@ -253,11 +237,12 @@ const SendNotificationsPage: React.FC = () => {
                 </p>
               </div>
 
-              {/* Individual selection */}
               {notification.target === 'individual' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {user?.role === 'parent' ? 'Izaberite vaspitača' : 'Izaberite roditelja'}
+                    {user?.role === 'parent'
+                      ? 'Izaberite vaspitača'
+                      : 'Izaberite roditelja'}
                   </label>
                   <select
                     value={user?.role === 'parent' ? selectedTeacherId : selectedParentId}
@@ -272,7 +257,9 @@ const SendNotificationsPage: React.FC = () => {
                     required
                   >
                     <option value="">
-                      {user?.role === 'parent' ? 'Izaberite vaspitača' : 'Izaberite roditelja'}
+                      {user?.role === 'parent'
+                        ? 'Izaberite vaspitača'
+                        : 'Izaberite roditelja'}
                     </option>
                     {(user?.role === 'parent' ? teachers : parents).map((person) => (
                       <option key={person.id} value={person.id}>
@@ -300,7 +287,6 @@ const SendNotificationsPage: React.FC = () => {
             </form>
           </div>
 
-          {/* Quick Templates */}
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center mb-6">
               <Bell className="w-6 h-6 text-green-600 mr-2" />
@@ -312,7 +298,8 @@ const SendNotificationsPage: React.FC = () => {
                 onClick={() => {
                   setNotification({
                     title: 'Izlet u zoološki vrt',
-                    message: 'Dragi roditelji, organizujemo izlet u zoološki vrt u petak. Molimo da dete donese ručak i vodu. Sastanak je u 9:00 ispred vrtića.',
+                    message:
+                      'Dragi roditelji, organizujemo izlet u zoološki vrt u petak. Molimo da dete donese ručak i vodu. Sastanak je u 9:00 ispred vrtića.',
                     target: 'parents'
                   })
                   setSelectedParentId('')
@@ -327,7 +314,8 @@ const SendNotificationsPage: React.FC = () => {
                 onClick={() => {
                   setNotification({
                     title: 'Roditeljski sastanak',
-                    message: 'Pozivamo vas na roditeljski sastanak koji će se održati u ponedeljak u 18:00. Molimo da se prijavite do petka.',
+                    message:
+                      'Pozivamo vas na roditeljski sastanak koji će se održati u ponedeljak u 18:00. Molimo da se prijavite do petka.',
                     target: 'parents'
                   })
                   setSelectedParentId('')
@@ -342,7 +330,8 @@ const SendNotificationsPage: React.FC = () => {
                 onClick={() => {
                   setNotification({
                     title: 'Bolest u grupi',
-                    message: 'Obaveštavamo vas da je u grupi zabeležen slučaj prehlade. Molimo da pazite na simptome kod vašeg deteta i kontaktirajte nas ako je potrebno.',
+                    message:
+                      'Obaveštavamo vas da je u grupi zabeležen slučaj prehlade. Molimo da pazite na simptome kod vašeg deteta i kontaktirajte nas ako je potrebno.',
                     target: 'parents'
                   })
                   setSelectedParentId('')
@@ -357,7 +346,8 @@ const SendNotificationsPage: React.FC = () => {
                 onClick={() => {
                   setNotification({
                     title: 'Praznik',
-                    message: 'Obaveštavamo vas da će vrtić biti zatvoren tokom praznika. Molimo da organizujete negu deteta za te dane.',
+                    message:
+                      'Obaveštavamo vas da će vrtić biti zatvoren tokom praznika. Molimo da organizujete negu deteta za te dane.',
                     target: 'all'
                   })
                   setSelectedParentId('')
@@ -371,7 +361,6 @@ const SendNotificationsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Parents List for Individual Notifications */}
         {parents.length > 0 && (
           <div className="mt-8 bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center mb-4">
