@@ -110,7 +110,7 @@ const UserManagementPage: React.FC = () => {
       setSaving(true)
 
       // Use Edge function to create user
-      const response = await fetch('/functions/v1/create-user', {
+      const response = await fetch('/functions/v1/admin-create-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -326,7 +326,7 @@ const UserManagementPage: React.FC = () => {
       setSaving(true)
 
       // Use Edge function to delete user
-      const response = await fetch('/functions/v1/delete-user', {
+      const response = await fetch('/functions/v1/admin-delete-user', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
