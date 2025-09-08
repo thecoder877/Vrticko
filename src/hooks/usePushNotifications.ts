@@ -46,7 +46,14 @@ export const usePushNotifications = () => {
   }, []);
 
   const registerServiceWorker = useCallback(async () => {
-    return await navigator.serviceWorker.register("/sw.js");
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js");
+      console.log("✅ Service Worker registered successfully:", registration);
+      return registration;
+    } catch (error) {
+      console.error("❌ Service Worker registration failed:", error);
+      throw error;
+    }
   }, []);
 
   const requestPermission = useCallback(async () => {
