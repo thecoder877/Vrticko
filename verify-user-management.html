@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify User Management Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        .user-list, .child-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .user-card, .child-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .role-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .role-admin { background-color: #dc3545; color: white; }
+        .role-teacher { background-color: #007bff; color: white; }
+        .role-parent { background-color: #28a745; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Verify User Management Page</h1>
+        <p>This page helps verify that your user management functionality is working correctly with your existing data.</p>
+        
+        <div class="test-section">
+            <h2>📊 Current Database Status</h2>
+            <button onclick="checkDatabaseStatus()">Check Database Status</button>
+            <div id="database-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>👥 Users in Database</h2>
+            <button onclick="loadUsers()">Load Users</button>
+            <div id="users-display"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>👶 Children in Database</h2>
+            <button onclick="loadChildren()">Load Children</button>
+            <div id="children-display"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>✅ User Management Page Checklist</h2>
+            <div id="checklist">
+                <div class="info">
+                    <h3>What should work in your User Management Page:</h3>
+                    <ul>
+                        <li>✅ <strong>Users Table:</strong> Should display all 8 users (1 admin, 3 teachers, 4 parents)</li>
+                        <li>✅ <strong>User Creation:</strong> Should allow creating new users with proper UUID generation</li>
+                        <li>✅ <strong>User Deletion:</strong> Should allow deleting users (with cascade deletion of children)</li>
+                        <li>✅ <strong>Children Table:</strong> Should display all children with parent information</li>
+                        <li>✅ <strong>Child Registration:</strong> Should allow registering new children</li>
+                        <li>✅ <strong>Child Editing:</strong> Should allow editing child information</li>
+                        <li>✅ <strong>Child Deletion:</strong> Should allow deleting children</li>
+                        <li>✅ <strong>Role-based Access:</strong> Only admin users should see this page</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h2>🚀 Next Steps</h2>
+            <div class="info">
+                <h3>To test your User Management Page:</h3>
+                <ol>
+                    <li><strong>Login as Admin:</strong> Use admin@vrticko.com to access the user management page</li>
+                    <li><strong>Verify Data Display:</strong> Check that all users and children are displayed correctly</li>
+                    <li><strong>Test User Creation:</strong> Try creating a new user and verify it appears in the list</li>
+                    <li><strong>Test Child Registration:</strong> Try registering a new child and verify it appears in the list</li>
+                    <li><strong>Test Editing:</strong> Try editing existing users and children</li>
+                    <li><strong>Test Deletion:</strong> Try deleting users and children (be careful with test data!)</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Import Supabase client
+        import { createClient } from 'https://cdn.skypack.dev/@supabase/supabase-js@2';
+        
+        // Supabase configuration (replace with your actual values)
+        const supabaseUrl = 'YOUR_SUPABASE_URL';
+        const supabaseKey = 'YOUR_SUPABASE_ANON_KEY';
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        window.checkDatabaseStatus = async function() {
+            const statusDiv = document.getElementById('database-status');
+            statusDiv.innerHTML = '<div class="info">Checking database status...</div>';
+            
+            try {
+                // Check users count
+                const { count: usersCount, error: usersError } = await supabase
+                    .from('users')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (usersError) throw usersError;
+
+                // Check children count
+                const { count: childrenCount, error: childrenError } = await supabase
+                    .from('children')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (childrenError) throw childrenError;
+
+                statusDiv.innerHTML = `
+                    <div class="success">
+                        <h3>✅ Database Status</h3>
+                        <p><strong>Users:</strong> ${usersCount} users found</p>
+                        <p><strong>Children:</strong> ${childrenCount} children found</p>
+                        <p><strong>Status:</strong> Database is accessible and working correctly!</p>
+                    </div>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `<div class="error">❌ Database Error: ${error.message}</div>`;
+            }
+        };
+
+        window.loadUsers = async function() {
+            const usersDiv = document.getElementById('users-display');
+            usersDiv.innerHTML = '<div class="info">Loading users...</div>';
+            
+            try {
+                const { data: users, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+
+                const usersHtml = users.map(user => `
+                    <div class="user-card">
+                        <h4>${user.username}</h4>
+                        <p><strong>Email:</strong> ${user.email || 'N/A'}</p>
+                        <p><strong>Role:</strong> 
+                            <span class="role-badge role-${user.role}">${user.role}</span>
+                        </p>
+                        <p><strong>Created:</strong> ${new Date(user.created_at).toLocaleDateString('sr-RS')}</p>
+                        <p><strong>ID:</strong> ${user.id.substring(0, 8)}...</p>
+                    </div>
+                `).join('');
+
+                usersDiv.innerHTML = `
+                    <div class="success">
+                        <h3>✅ Found ${users.length} users</h3>
+                        <div class="user-list">${usersHtml}</div>
+                    </div>
+                `;
+            } catch (error) {
+                usersDiv.innerHTML = `<div class="error">❌ Error loading users: ${error.message}</div>`;
+            }
+        };
+
+        window.loadChildren = async function() {
+            const childrenDiv = document.getElementById('children-display');
+            childrenDiv.innerHTML = '<div class="info">Loading children...</div>';
+            
+            try {
+                const { data: children, error } = await supabase
+                    .from('children')
+                    .select(`
+                        *,
+                        users!children_parent_id_fkey(username)
+                    `)
+                    .order('name');
+                
+                if (error) throw error;
+
+                const childrenHtml = children.map(child => `
+                    <div class="child-card">
+                        <h4>${child.name}</h4>
+                        <p><strong>Parent:</strong> ${child.users?.username || 'N/A'}</p>
+                        <p><strong>Group:</strong> ${child.group_name || 'N/A'}</p>
+                        <p><strong>Gender:</strong> ${child.gender || 'N/A'}</p>
+                        <p><strong>Birth Date:</strong> ${child.birth_date ? new Date(child.birth_date).toLocaleDateString('sr-RS') : 'N/A'}</p>
+                        <p><strong>Personal ID:</strong> ${child.personal_id || 'N/A'}</p>
+                        <p><strong>Allergies:</strong> ${child.allergies || 'N/A'}</p>
+                    </div>
+                `).join('');
+
+                childrenDiv.innerHTML = `
+                    <div class="success">
+                        <h3>✅ Found ${children.length} children</h3>
+                        <div class="child-list">${childrenHtml}</div>
+                    </div>
+                `;
+            } catch (error) {
+                childrenDiv.innerHTML = `<div class="error">❌ Error loading children: ${error.message}</div>`;
+            }
+        };
+
+        // Auto-load data on page load
+        window.addEventListener('load', () => {
+            checkDatabaseStatus();
+        });
+    </script>
+</body>
+</html>

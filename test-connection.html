@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Connection Test</title>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <div id="status">Testing...</div>
+    <div id="result"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://bylgwspkjtgcasuldgeq.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5bGd3c3BranRnY2FzdWxkZ2VxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5Nzc2MjUsImV4cCI6MjA3MjU1MzYyNX0.mBHH6tcXXzjMP6zJiw8Oiswh4WK-Z6T8xVt9iq6Bp24';
+
+        async function testConnection() {
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+
+            try {
+                statusDiv.textContent = 'Testing Supabase connection...';
+                
+                // Test 1: Basic connectivity
+                const response = await fetch(`${SUPABASE_URL}/rest/v1/`, {
+                    headers: {
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+                    }
+                });
+
+                if (response.ok) {
+                    statusDiv.textContent = '✅ Supabase is accessible';
+                    resultDiv.innerHTML = `
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>URL:</strong> ${SUPABASE_URL}</p>
+                        <p><strong>Response:</strong> ${response.statusText}</p>
+                    `;
+                } else {
+                    statusDiv.textContent = '❌ Supabase returned error';
+                    resultDiv.innerHTML = `
+                        <p><strong>Status:</strong> ${response.status}</p>
+                        <p><strong>Error:</strong> ${response.statusText}</p>
+                    `;
+                }
+            } catch (error) {
+                statusDiv.textContent = '❌ Connection failed';
+                resultDiv.innerHTML = `
+                    <p><strong>Error:</strong> ${error.message}</p>
+                    <p><strong>Type:</strong> ${error.name}</p>
+                `;
+            }
+        }
+
+        // Run test when page loads
+        testConnection();
+    </script>
+</body>
+</html>
