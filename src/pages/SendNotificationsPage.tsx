@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react'
-import { supabase, type Notification, type Child, type User } from '../lib/supabase'
+import { supabase, type Child, type User } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
-import { Send, Users, Bell, AlertCircle } from 'lucide-react'
+import { Send, Users, Bell } from 'lucide-react'
 
 const SendNotificationsPage: React.FC = () => {
-  const [children, setChildren] = useState<Child[]>([])
+  const [, setChildren] = useState<Child[]>([])
   const [parents, setParents] = useState<User[]>([])
   const [teachers, setTeachers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)

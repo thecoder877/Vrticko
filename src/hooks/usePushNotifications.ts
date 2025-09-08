@@ -203,11 +203,69 @@ export const usePushNotifications = () => {
     };
   }, [initializePushNotifications]);
 
+  const testNotification = useCallback(async () => {
+    if (!subscription) {
+      throw new Error('No subscription available');
+    }
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error } = await supabase.functions.invoke('send-push-notification', {
+        body: {
+          userId: user.id,
+          title: 'Test Notifikacija',
+          message: 'Ovo je test notifikacija!',
+          icon: '/vite.svg'
+        }
+      });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('❌ Error sending test notification:', err);
+      throw err;
+    }
+  }, [subscription]);
+
+  const removeSubscription = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Remove from database
+      const { error } = await supabase
+        .from('push_subscriptions')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('❌ Error removing subscription:', error);
+      }
+
+      // Unsubscribe from push manager
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      if (existing) {
+        await existing.unsubscribe();
+      }
+
+      setSubscription(null);
+      console.log('✅ Subscription removed successfully');
+    } catch (err) {
+      console.error('❌ Error removing subscription:', err);
+      throw err;
+    }
+  }, []);
+
   return {
     isSupported,
     permission,
     subscription,
     isLoading,
     initializePushNotifications,
+    setupRealtimeNotifications,
+    testNotification,
+    removeSubscription,
   };
 };

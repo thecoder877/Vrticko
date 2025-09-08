@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { supabase, type Attendance, type Child, type User, type Notification } from '../lib/supabase'
+import { supabase, type Attendance } from '../lib/supabase'
 import { BarChart3, Users, Calendar, Bell, TrendingUp, TrendingDown } from 'lucide-react'
 
 const StatisticsPage: React.FC = () => {

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react'
-import { User } from '../lib/supabase'
+import type { User } from '../lib/supabase'
 
 interface AuthContextType {
   user: User | null
@@ -24,7 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (_email: string, _password: string) => {
     setLoading(true)
     // Demo login - accept any credentials
     setTimeout(() => {
@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 1000)
   }
 
-  const signUp = async (email: string, password: string, username: string, role: string) => {
+  const signUp = async (_email: string, _password: string, username: string, role: string) => {
     setLoading(true)
     // Demo signup
     setTimeout(() => {

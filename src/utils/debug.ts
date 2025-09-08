@@ -26,7 +26,7 @@ export const getAuthContext = () => {
 // Function to test Supabase connection
 export const testSupabaseConnection = async () => {
   try {
-    const { data, error } = await supabase.from('users').select('count').limit(1)
+    const { error } = await supabase.from('users').select('count').limit(1)
     if (error) {
       console.error('Supabase connection test failed:', error)
       return false

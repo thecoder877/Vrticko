@@ -112,7 +112,7 @@ export const markAllNotificationsAsRead = async (userId: string) => {
 
       // Debug log removed to reduce console spam
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('notifications')
         .update({ read_status: updatedReadStatus })
         .eq('id', notification.id)
@@ -128,7 +128,7 @@ export const markAllNotificationsAsRead = async (userId: string) => {
     }
 
     // Verify the updates by fetching the notifications again
-    const { data: verifyData, error: verifyError } = await supabase
+    const { error: verifyError } = await supabase
       .from('notifications')
       .select('id, read_status')
       .in('id', notificationsToUpdate.map(n => n.id))

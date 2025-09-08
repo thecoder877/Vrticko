@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { UserPlus, Users, Trash2 } from 'lucide-react'
+import { UserPlus, Users } from 'lucide-react'
 
 const UserManagement: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false)

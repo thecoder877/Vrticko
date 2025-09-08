@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { supabase, type Attendance, type Child } from '../lib/supabase'
-import { Calendar, CheckCircle, XCircle, Save, Users } from 'lucide-react'
+import { Calendar, CheckCircle, XCircle, Users } from 'lucide-react'
 
 const TeacherAttendancePage: React.FC = () => {
   const [children, setChildren] = useState<Child[]>([])

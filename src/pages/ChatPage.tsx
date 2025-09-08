@@ -192,12 +192,6 @@ const ChatPage: React.FC = () => {
     })
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('sr-RS', {
-      day: 'numeric',
-      month: 'short'
-    })
-  }
 
   if (loading) {
     return (

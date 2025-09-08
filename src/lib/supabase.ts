@@ -70,6 +70,7 @@ export interface Schedule {
   date: string
   activity: string
   group: string
+  group_name: string
   created_at: string
 }
 
