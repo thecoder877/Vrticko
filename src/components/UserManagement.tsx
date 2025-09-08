@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { supabase } from '../lib/supabase'
 import { UserPlus, Users } from 'lucide-react'
+import { createUserAdmin } from '../utils/adminUsers' // ✅ koristi Edge funkciju
 
 const UserManagement: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -8,44 +8,32 @@ const UserManagement: React.FC = () => {
     email: '',
     password: '',
     username: '',
+    full_name: '',
     role: 'parent' as 'parent' | 'teacher' | 'admin'
   })
   const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
+  const [message, setMessage] = useState<string | null>(null)
 
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
-    setMessage('')
+    setMessage(null)
 
     try {
-      // Create auth user
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: newUser.email,
+      // ✅ pozovi Edge funkciju (service role na serveru)
+      const res = await createUserAdmin({
+        email: newUser.email.trim(),
         password: newUser.password,
-        email_confirm: true
+        username: newUser.username.trim(),
+        role: newUser.role,
+        full_name: newUser.full_name?.trim() || undefined,
       })
 
-      if (authError) throw authError
-
-      if (authData.user) {
-        // Create user profile
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            username: newUser.username,
-            role: newUser.role
-          })
-
-        if (profileError) throw profileError
-
-        setMessage('Korisnik je uspešno kreiran!')
-        setNewUser({ email: '', password: '', username: '', role: 'parent' })
-        setShowCreateForm(false)
-      }
-    } catch (error: any) {
-      setMessage(`Greška: ${error.message}`)
+      setMessage(`Korisnik je uspešno kreiran! (id: ${res?.userId ?? '—'})`)
+      setNewUser({ email: '', password: '', username: '', full_name: '', role: 'parent' })
+      setShowCreateForm(false)
+    } catch (err: any) {
+      setMessage(`Greška pri kreiranju korisnika: ${err?.message || 'Nepoznata greška'}`)
     } finally {
       setLoading(false)
     }
@@ -80,6 +68,7 @@ const UserManagement: React.FC = () => {
                 required
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Lozinka
@@ -93,6 +82,7 @@ const UserManagement: React.FC = () => {
                 minLength={6}
               />
             </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Korisničko ime
@@ -105,13 +95,29 @@ const UserManagement: React.FC = () => {
                 required
               />
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ime i prezime (opciono)
+              </label>
+              <input
+                type="text"
+                value={newUser.full_name}
+                onChange={(e) => setNewUser({ ...newUser, full_name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="npr. Marko Marković"
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Uloga
               </label>
               <select
                 value={newUser.role}
-                onChange={(e) => setNewUser({ ...newUser, role: e.target.value as 'parent' | 'teacher' | 'admin' })}
+                onChange={(e) =>
+                  setNewUser({ ...newUser, role: e.target.value as 'parent' | 'teacher' | 'admin' })
+                }
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="parent">Roditelj</option>
@@ -119,6 +125,7 @@ const UserManagement: React.FC = () => {
                 <option value="admin">Administracija</option>
               </select>
             </div>
+
             <div className="flex space-x-3">
               <button
                 type="submit"
@@ -140,7 +147,11 @@ const UserManagement: React.FC = () => {
       )}
 
       {message && (
-        <div className={`p-4 rounded-md ${message.includes('Greška') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
+        <div
+          className={`p-4 rounded-md ${
+            message.toLowerCase().includes('greška') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
+          }`}
+        >
           {message}
         </div>
       )}
@@ -151,7 +162,7 @@ const UserManagement: React.FC = () => {
           Lista korisnika
         </h3>
         <p className="text-gray-600">
-          Funkcionalnost za prikaz i upravljanje postojećim korisnicima će biti dodana u sledećoj verziji.
+          Funkcionalnost za prikaz i upravljanje postojećim korisnicima će biti dodata u sledećoj verziji.
         </p>
       </div>
     </div>
