@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { supabase, type User, type Child } from '../lib/supabase'
 import { Users, Plus, Trash2, UserPlus, Baby, Edit } from 'lucide-react'
 
+// Uvek koristi pun Supabase URL (radi i lokalno i na Vercelu)
+const SUPABASE_URL = (import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '')
+
 const UserManagementPage: React.FC = () => {
   const [users, setUsers] = useState<User[]>([])
   const [children, setChildren] = useState<Child[]>([])
@@ -39,13 +42,11 @@ const UserManagementPage: React.FC = () => {
   const uploadPhoto = async (file: File): Promise<string | null> => {
     try {
       setUploading(true)
-      
-      // Create unique filename
+
       const fileExt = file.name.split('.').pop()
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`
       const filePath = `child-photos/${fileName}`
 
-      // Upload file to Supabase Storage
       const { error } = await supabase.storage
         .from('child-photos')
         .upload(filePath, file)
@@ -55,10 +56,9 @@ const UserManagementPage: React.FC = () => {
         return null
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('child-photos')
-        .getPublicUrl(filePath)
+      // ✅ PRAVILAN destructuring:
+      const { data } = supabase.storage.from('child-photos').getPublicUrl(filePath)
+      const publicUrl = data.publicUrl
 
       return publicUrl
     } catch (error) {
@@ -71,8 +71,7 @@ const UserManagementPage: React.FC = () => {
 
   const fetchData = async () => {
     try {
-      // Use regular client for fetching data
-      // Fetch users
+      // users
       const { data: usersData, error: usersError } = await supabase
         .from('users')
         .select('*')
@@ -81,7 +80,7 @@ const UserManagementPage: React.FC = () => {
       if (usersError) throw usersError
       setUsers(usersData || [])
 
-      // Fetch children
+      // children
       const { data: childrenData, error: childrenError } = await supabase
         .from('children')
         .select(`
@@ -105,16 +104,23 @@ const UserManagementPage: React.FC = () => {
       alert('Molimo unesite sve podatke')
       return
     }
+    if (!SUPABASE_URL) {
+      setMessage('Greška: SUPABASE_URL nije podešen.')
+      return
+    }
 
     try {
       setSaving(true)
 
-      // Use Edge function to create user
-      const response = await fetch('/functions/v1/admin-create-user', {
+      const session = (await supabase.auth.getSession()).data.session
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/admin-create-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           email: newUser.email,
@@ -124,36 +130,31 @@ const UserManagementPage: React.FC = () => {
         })
       })
 
-      const data = await response.json()
+      let data: any = null
+      try { data = await response.json() } catch {}
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to create user')
+        throw new Error((data && (data.error || data.message)) || `HTTP ${response.status}`)
       }
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create user')
+      if (!data?.success) {
+        throw new Error(data?.error || 'Neuspešno kreiranje korisnika')
       }
 
       setMessage('Korisnik je uspešno kreiran!')
       setNewUser({ email: '', password: '', username: '', role: 'parent' })
       setShowUserForm(false)
       await fetchData()
-      
       setTimeout(() => setMessage(''), 5000)
     } catch (error: any) {
       console.error('Error creating user:', error)
-      setMessage(`Greška pri kreiranju korisnika: ${error.message}`)
+      setMessage(`Greška pri kreiranju korisnika: ${error.message || String(error)}`)
       setTimeout(() => setMessage(''), 3000)
     } finally {
       setSaving(false)
     }
   }
 
-  const validatePersonalId = (personalId: string): boolean => {
-    // Serbian personal ID validation (13 digits)
-    const personalIdRegex = /^\d{13}$/
-    return personalIdRegex.test(personalId)
-  }
+  const validatePersonalId = (personalId: string): boolean => /^\d{13}$/.test(personalId)
 
   const handleCreateChild = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -161,8 +162,6 @@ const UserManagementPage: React.FC = () => {
       setMessage('Molimo unesite ime deteta i izaberite roditelja.')
       return
     }
-
-    // Validate personal ID if provided
     if (newChild.personal_id && !validatePersonalId(newChild.personal_id)) {
       setMessage('Matični broj mora imati tačno 13 cifara.')
       return
@@ -172,13 +171,10 @@ const UserManagementPage: React.FC = () => {
       setSaving(true)
 
       let photoUrl = newChild.photo_url
-
-      // Upload photo if selected
       if (selectedFile) {
         const uploadedUrl = await uploadPhoto(selectedFile)
-        if (uploadedUrl) {
-          photoUrl = uploadedUrl
-        } else {
+        if (uploadedUrl) photoUrl = uploadedUrl
+        else {
           setMessage('Greška pri upload-u fotografije.')
           return
         }
@@ -187,7 +183,7 @@ const UserManagementPage: React.FC = () => {
       const { error } = await supabase
         .from('children')
         .insert([{
-          id: crypto.randomUUID(), // Explicitly generate UUID
+          id: crypto.randomUUID(),
           name: newChild.name,
           parent_id: newChild.parent_id,
           birth_date: newChild.birth_date || null,
@@ -216,7 +212,6 @@ const UserManagementPage: React.FC = () => {
       setSelectedFile(null)
       setShowChildForm(false)
       await fetchData()
-      
       setTimeout(() => setMessage(''), 3000)
     } catch (error: any) {
       console.error('Error creating child:', error)
@@ -250,8 +245,6 @@ const UserManagementPage: React.FC = () => {
       setMessage('Molimo unesite ime deteta i izaberite roditelja.')
       return
     }
-
-    // Validate personal ID if provided
     if (newChild.personal_id && !validatePersonalId(newChild.personal_id)) {
       setMessage('Matični broj mora imati tačno 13 cifara.')
       return
@@ -261,13 +254,10 @@ const UserManagementPage: React.FC = () => {
       setSaving(true)
 
       let photoUrl = newChild.photo_url
-
-      // Upload photo if selected
       if (selectedFile) {
         const uploadedUrl = await uploadPhoto(selectedFile)
-        if (uploadedUrl) {
-          photoUrl = uploadedUrl
-        } else {
+        if (uploadedUrl) photoUrl = uploadedUrl
+        else {
           setMessage('Greška pri upload-u fotografije.')
           return
         }
@@ -306,7 +296,6 @@ const UserManagementPage: React.FC = () => {
       setSelectedFile(null)
       setShowEditForm(false)
       await fetchData()
-      
       setTimeout(() => setMessage(''), 3000)
     } catch (error: any) {
       console.error('Error updating child:', error)
@@ -318,33 +307,36 @@ const UserManagementPage: React.FC = () => {
   }
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Da li ste sigurni da želite da obrišete ovog korisnika?')) {
+    if (!confirm('Da li ste sigurni da želite da obrišete ovog korisnika?')) return
+    if (!SUPABASE_URL) {
+      setMessage('Greška: SUPABASE_URL nije podešen.')
       return
     }
 
     try {
       setSaving(true)
 
-      // Use Edge function to delete user
-      const response = await fetch('/functions/v1/admin-delete-user', {
+      const session = (await supabase.auth.getSession()).data.session
+      const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/admin-delete-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`,
+          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          userId: userId
-        })
+        body: JSON.stringify({ userId })
       })
 
-      const data = await response.json()
+      let data: any = null
+      try { data = await response.json() } catch {}
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to delete user')
+        throw new Error((data && (data.error || data.message)) || `HTTP ${response.status}`)
       }
-
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to delete user')
+      if (!data?.success) {
+        throw new Error(data?.error || 'Neuspešno brisanje korisnika')
       }
 
       setMessage('Korisnik je uspešno obrisan!')
@@ -352,7 +344,7 @@ const UserManagementPage: React.FC = () => {
       setTimeout(() => setMessage(''), 3000)
     } catch (error: any) {
       console.error('Error deleting user:', error)
-      setMessage(`Greška pri brisanju korisnika: ${error.message}`)
+      setMessage(`Greška pri brisanju korisnika: ${error.message || String(error)}`)
       setTimeout(() => setMessage(''), 3000)
     } finally {
       setSaving(false)
@@ -360,16 +352,10 @@ const UserManagementPage: React.FC = () => {
   }
 
   const handleDeleteChild = async (childId: string) => {
-    if (!confirm('Da li ste sigurni da želite da obrišete ovo dete?')) {
-      return
-    }
+    if (!confirm('Da li ste sigurni da želite da obrišete ovo dete?')) return
 
     try {
-      const { error } = await supabase
-        .from('children')
-        .delete()
-        .eq('id', childId)
-
+      const { error } = await supabase.from('children').delete().eq('id', childId)
       if (error) throw error
 
       setMessage('Dete je uspešno obrisano!')
@@ -382,9 +368,8 @@ const UserManagementPage: React.FC = () => {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('sr-RS')
-  }
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('sr-RS')
 
   const getRoleColor = (role: string) => {
     switch (role) {
@@ -440,7 +425,6 @@ const UserManagementPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Message Display */}
         {message && (
           <div className={`mb-6 p-4 rounded-lg ${
             message.includes('uspešno') 
@@ -470,9 +454,7 @@ const UserManagementPage: React.FC = () => {
             <form onSubmit={handleCreateUser} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
                   <input
                     type="email"
                     value={newUser.email}
@@ -482,9 +464,7 @@ const UserManagementPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Korisničko ime
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Korisničko ime</label>
                   <input
                     type="text"
                     value={newUser.username}
@@ -497,9 +477,7 @@ const UserManagementPage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Lozinka
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Lozinka</label>
                   <input
                     type="password"
                     value={newUser.password}
@@ -509,9 +487,7 @@ const UserManagementPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Uloga
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Uloga</label>
                   <select
                     value={newUser.role}
                     onChange={(e) => setNewUser({ ...newUser, role: e.target.value as any })}
@@ -560,10 +536,10 @@ const UserManagementPage: React.FC = () => {
               <button
                 onClick={() => {
                   setShowChildForm(false)
-                  setNewChild({ 
-                    name: '', 
-                    parent_id: '', 
-                    birth_date: '', 
+                  setNewChild({
+                    name: '',
+                    parent_id: '',
+                    birth_date: '',
                     group_name: 'Grupa A',
                     gender: '',
                     allergies: '',
@@ -581,9 +557,7 @@ const UserManagementPage: React.FC = () => {
             <form onSubmit={handleCreateChild} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ime deteta
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ime deteta</label>
                   <input
                     type="text"
                     value={newChild.name}
@@ -593,9 +567,7 @@ const UserManagementPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Roditelj
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Roditelj</label>
                   <select
                     value={newChild.parent_id}
                     onChange={(e) => setNewChild({ ...newChild, parent_id: e.target.value })}
@@ -603,10 +575,8 @@ const UserManagementPage: React.FC = () => {
                     required
                   >
                     <option value="">Izaberite roditelja</option>
-                    {users.filter(user => user.role === 'parent').map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.username}
-                      </option>
+                    {users.filter(u => u.role === 'parent').map(u => (
+                      <option key={u.id} value={u.id}>{u.username}</option>
                     ))}
                   </select>
                 </div>
@@ -614,9 +584,7 @@ const UserManagementPage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Datum rođenja
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Datum rođenja</label>
                   <input
                     type="date"
                     value={newChild.birth_date}
@@ -626,9 +594,7 @@ const UserManagementPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Grupa
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Grupa</label>
                   <select
                     value={newChild.group_name}
                     onChange={(e) => setNewChild({ ...newChild, group_name: e.target.value })}
@@ -643,9 +609,7 @@ const UserManagementPage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Pol
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Pol</label>
                   <select
                     value={newChild.gender}
                     onChange={(e) => setNewChild({ ...newChild, gender: e.target.value as 'muški' | 'ženski' | '' })}
@@ -657,9 +621,7 @@ const UserManagementPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Matični broj
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Matični broj</label>
                   <input
                     type="text"
                     value={newChild.personal_id}
@@ -673,17 +635,13 @@ const UserManagementPage: React.FC = () => {
                     maxLength={13}
                   />
                   {newChild.personal_id && !validatePersonalId(newChild.personal_id) && (
-                    <p className="text-sm text-red-600 mt-1">
-                      Matični broj mora imati tačno 13 cifara
-                    </p>
+                    <p className="text-sm text-red-600 mt-1">Matični broj mora imati tačno 13 cifara</p>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Alergije
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Alergije</label>
                 <textarea
                   value={newChild.allergies}
                   onChange={(e) => setNewChild({ ...newChild, allergies: e.target.value })}
@@ -694,9 +652,7 @@ const UserManagementPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Dodatne beleške
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Dodatne beleške</label>
                 <textarea
                   value={newChild.additional_notes}
                   onChange={(e) => setNewChild({ ...newChild, additional_notes: e.target.value })}
@@ -707,33 +663,19 @@ const UserManagementPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Fotografija deteta
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fotografija deteta</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      setSelectedFile(file)
-                    }
+                    if (file) setSelectedFile(file)
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {selectedFile && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Izabrana datoteka: {selectedFile.name}
-                  </p>
-                )}
-                {uploading && (
-                  <p className="text-sm text-blue-600 mt-1">
-                    Upload u toku...
-                  </p>
-                )}
-                <p className="text-sm text-gray-500 mt-1">
-                  Izaberite fotografiju deteta (opciono)
-                </p>
+                {selectedFile && <p className="text-sm text-gray-600 mt-1">Izabrana datoteka: {selectedFile.name}</p>}
+                {uploading && <p className="text-sm text-blue-600 mt-1">Upload u toku...</p>}
+                <p className="text-sm text-gray-500 mt-1">Izaberite fotografiju deteta (opciono)</p>
               </div>
 
               <div className="flex space-x-3">
@@ -753,10 +695,10 @@ const UserManagementPage: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setShowChildForm(false)
-                    setNewChild({ 
-                      name: '', 
-                      parent_id: '', 
-                      birth_date: '', 
+                    setNewChild({
+                      name: '',
+                      parent_id: '',
+                      birth_date: '',
                       group_name: 'Grupa A',
                       gender: '',
                       allergies: '',
@@ -783,10 +725,10 @@ const UserManagementPage: React.FC = () => {
                 onClick={() => {
                   setShowEditForm(false)
                   setEditingChild(null)
-                  setNewChild({ 
-                    name: '', 
-                    parent_id: '', 
-                    birth_date: '', 
+                  setNewChild({
+                    name: '',
+                    parent_id: '',
+                    birth_date: '',
                     group_name: 'Grupa A',
                     gender: '',
                     allergies: '',
@@ -805,9 +747,7 @@ const UserManagementPage: React.FC = () => {
             <form onSubmit={handleUpdateChild} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Ime deteta
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Ime deteta</label>
                   <input
                     type="text"
                     value={newChild.name}
@@ -817,9 +757,7 @@ const UserManagementPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Roditelj
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Roditelj</label>
                   <select
                     value={newChild.parent_id}
                     onChange={(e) => setNewChild({ ...newChild, parent_id: e.target.value })}
@@ -827,17 +765,13 @@ const UserManagementPage: React.FC = () => {
                     required
                   >
                     <option value="">Izaberite roditelja</option>
-                    {users.filter(user => user.role === 'parent').map(user => (
-                      <option key={user.id} value={user.id}>
-                        {user.username}
-                      </option>
+                    {users.filter(u => u.role === 'parent').map(u => (
+                      <option key={u.id} value={u.id}>{u.username}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Datum rođenja
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Datum rođenja</label>
                   <input
                     type="date"
                     value={newChild.birth_date}
@@ -846,9 +780,7 @@ const UserManagementPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Grupa
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Grupa</label>
                   <select
                     value={newChild.group_name}
                     onChange={(e) => setNewChild({ ...newChild, group_name: e.target.value })}
@@ -860,9 +792,7 @@ const UserManagementPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Pol
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Pol</label>
                   <select
                     value={newChild.gender}
                     onChange={(e) => setNewChild({ ...newChild, gender: e.target.value as 'muški' | 'ženski' | '' })}
@@ -874,9 +804,7 @@ const UserManagementPage: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Matični broj
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Matični broj</label>
                   <input
                     type="text"
                     value={newChild.personal_id}
@@ -890,17 +818,13 @@ const UserManagementPage: React.FC = () => {
                     maxLength={13}
                   />
                   {newChild.personal_id && !validatePersonalId(newChild.personal_id) && (
-                    <p className="text-sm text-red-600 mt-1">
-                      Matični broj mora imati tačno 13 cifara
-                    </p>
+                    <p className="text-sm text-red-600 mt-1">Matični broj mora imati tačno 13 cifara</p>
                   )}
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Alergije
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Alergije</label>
                 <textarea
                   value={newChild.allergies}
                   onChange={(e) => setNewChild({ ...newChild, allergies: e.target.value })}
@@ -911,9 +835,7 @@ const UserManagementPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Dodatne beleške
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Dodatne beleške</label>
                 <textarea
                   value={newChild.additional_notes}
                   onChange={(e) => setNewChild({ ...newChild, additional_notes: e.target.value })}
@@ -924,38 +846,22 @@ const UserManagementPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Fotografija deteta
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fotografija deteta</label>
                 <input
                   type="file"
                   accept="image/*"
                   onChange={(e) => {
                     const file = e.target.files?.[0]
-                    if (file) {
-                      setSelectedFile(file)
-                    }
+                    if (file) setSelectedFile(file)
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
-                {selectedFile && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Izabrana datoteka: {selectedFile.name}
-                  </p>
+                {selectedFile && <p className="text-sm text-gray-600 mt-1">Izabrana datoteka: {selectedFile.name}</p>}
+                {uploading && <p className="text-sm text-blue-600 mt-1">Upload u toku...</p>}
+                {editingChild?.photo_url && !selectedFile && (
+                  <p className="text-sm text-gray-600 mt-1">Trenutna fotografija: {editingChild.photo_url}</p>
                 )}
-                {uploading && (
-                  <p className="text-sm text-blue-600 mt-1">
-                    Upload u toku...
-                  </p>
-                )}
-                {editingChild.photo_url && !selectedFile && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    Trenutna fotografija: {editingChild.photo_url}
-                  </p>
-                )}
-                <p className="text-sm text-gray-500 mt-1">
-                  Izaberite novu fotografiju deteta (opciono)
-                </p>
+                <p className="text-sm text-gray-500 mt-1">Izaberite novu fotografiju deteta (opciono)</p>
               </div>
 
               <div className="flex space-x-4">
@@ -976,10 +882,10 @@ const UserManagementPage: React.FC = () => {
                   onClick={() => {
                     setShowEditForm(false)
                     setEditingChild(null)
-                    setNewChild({ 
-                      name: '', 
-                      parent_id: '', 
-                      birth_date: '', 
+                    setNewChild({
+                      name: '',
+                      parent_id: '',
+                      birth_date: '',
                       group_name: 'Grupa A',
                       gender: '',
                       allergies: '',
@@ -1021,6 +927,7 @@ const UserManagementPage: React.FC = () => {
                       <button
                         onClick={() => handleDeleteUser(user.id)}
                         className="text-red-600 hover:text-red-800"
+                        title="Obriši korisnika"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -1046,8 +953,8 @@ const UserManagementPage: React.FC = () => {
                       <div className="flex items-center space-x-4 mb-2">
                         {child.photo_url ? (
                           <div className="w-12 h-12 rounded-full overflow-hidden">
-                            <img 
-                              src={child.photo_url} 
+                            <img
+                              src={child.photo_url}
                               alt={`${child.name} fotografija`}
                               className="w-full h-full object-cover"
                             />
@@ -1066,21 +973,21 @@ const UserManagementPage: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
                         <p>Roditelj: {child.users?.username || 'Nepoznato'}</p>
                         <p>Grupa: {child.group_name || 'Nepoznato'}</p>
                         <p>Rođen: {child.birth_date ? formatDate(child.birth_date) : 'Nepoznato'}</p>
                         {child.personal_id && <p>Matični broj: {child.personal_id}</p>}
                       </div>
-                      
+
                       {child.allergies && (
                         <div className="mt-2">
                           <p className="text-sm font-medium text-red-600">⚠️ Alergije:</p>
                           <p className="text-sm text-red-600">{child.allergies}</p>
                         </div>
                       )}
-                      
+
                       {child.additional_notes && (
                         <div className="mt-2">
                           <p className="text-sm font-medium text-gray-700">📝 Dodatne beleške:</p>

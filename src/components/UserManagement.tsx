@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { UserPlus, Users } from 'lucide-react'
-import { createUserAdmin } from '../utils/adminUsers' // ✅ koristimo Edge funkciju preko utila
+import { createUserAdmin } from '../utils/adminUsers'
 
 const UserManagement: React.FC = () => {
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -27,7 +27,6 @@ const UserManagement: React.FC = () => {
         role: newUser.role,
         full_name: newUser.full_name?.trim() || undefined,
       })
-
       setMessage(`Korisnik je uspešno kreiran! (id: ${res?.userId ?? '—'})`)
       setNewUser({ email: '', password: '', username: '', full_name: '', role: 'parent' })
       setShowCreateForm(false)
@@ -136,11 +135,7 @@ const UserManagement: React.FC = () => {
       )}
 
       {message && (
-        <div
-          className={`p-4 rounded-md ${
-            message.toLowerCase().includes('greška') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'
-          }`}
-        >
+        <div className={`p-4 rounded-md ${message.toLowerCase().includes('greška') ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
           {message}
         </div>
       )}
@@ -151,7 +146,7 @@ const UserManagement: React.FC = () => {
           Lista korisnika
         </h3>
         <p className="text-gray-600">
-          Funkcionalnost za prikaz i upravljanje postojećim korisnicima će biti dodata u sledećoj verziji.
+          Funkcionalnost za prikaz i upravljanje postojećim korisnicima biće dodata u sledećoj verziji.
         </p>
       </div>
     </div>
