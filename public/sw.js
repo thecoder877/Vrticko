@@ -1,26 +1,77 @@
 // Service Worker za push notifikacije
-const CACHE_NAME = 'vrticko-cache-v3';
-const urlsToCache = [
-  '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
-  '/manifest.json'
-];
+const CACHE_NAME = 'vrticko-cache-v4';
 
 // Install event
 self.addEventListener('install', (event) => {
+  console.log('🔧 Service Worker installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(urlsToCache))
+      .then((cache) => {
+        // Cache only essential files that we know exist
+        return cache.addAll([
+          '/',
+          '/manifest.json',
+          '/vite.svg'
+        ]).catch((error) => {
+          console.warn('⚠️ Some files could not be cached:', error);
+          // Continue even if some files fail to cache
+          return Promise.resolve();
+        });
+      })
+      .then(() => {
+        console.log('✅ Service Worker installed successfully');
+        // Skip waiting to activate immediately
+        return self.skipWaiting();
+      })
   );
 });
 
-// Fetch event (opciono - možeš obrisati ako ne koristiš cache)
+// Fetch event - handle caching for better performance
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
+  // Skip caching for API calls and external resources
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/api/') || 
+      url.pathname.startsWith('/functions/') ||
+      !url.origin.includes(location.hostname)) {
+    return;
+  }
+
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request);
-    })
+    caches.match(event.request)
+      .then((response) => {
+        if (response) {
+          return response;
+        }
+        
+        // If not in cache, fetch and optionally cache
+        return fetch(event.request)
+          .then((fetchResponse) => {
+            // Only cache successful responses
+            if (fetchResponse.status === 200) {
+              const responseClone = fetchResponse.clone();
+              caches.open(CACHE_NAME)
+                .then((cache) => {
+                  // Only cache static assets, not HTML pages
+                  if (event.request.destination === 'script' || 
+                      event.request.destination === 'style' ||
+                      event.request.destination === 'image') {
+                    cache.put(event.request, responseClone);
+                  }
+                });
+            }
+            return fetchResponse;
+          })
+          .catch((error) => {
+            console.warn('Fetch failed:', error);
+            // Return a fallback response if needed
+            throw error;
+          });
+      })
   );
 });
 
@@ -104,8 +155,22 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('activate', (event) => {
   console.log('✅ Service Worker activated');
   event.waitUntil(
-    self.clients.claim().then(() => {
-      console.log('Service Worker ready for push notifications');
+    Promise.all([
+      // Clean up old caches
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('🗑️ Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Take control of all clients
+      self.clients.claim()
+    ]).then(() => {
+      console.log('🚀 Service Worker ready for push notifications');
     })
   );
 });

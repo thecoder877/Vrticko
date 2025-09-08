@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Service Worker Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>Service Worker Test Page</h1>
+    
+    <div id="status"></div>
+    
+    <button onclick="testServiceWorker()">Test Service Worker Registration</button>
+    <button onclick="testCache()">Test Cache</button>
+    <button onclick="testPushNotification()">Test Push Notification</button>
+    <button onclick="clearCache()">Clear Cache</button>
+    
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+        
+        async function testServiceWorker() {
+            try {
+                if (!('serviceWorker' in navigator)) {
+                    updateStatus('Service Worker not supported', 'error');
+                    return;
+                }
+                
+                updateStatus('Registering Service Worker...', 'info');
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                updateStatus(`Service Worker registered successfully! Scope: ${registration.scope}`, 'success');
+                
+                // Check if service worker is active
+                if (registration.active) {
+                    updateStatus('Service Worker is active and ready', 'success');
+                } else if (registration.installing) {
+                    updateStatus('Service Worker is installing...', 'info');
+                } else if (registration.waiting) {
+                    updateStatus('Service Worker is waiting to activate...', 'info');
+                }
+                
+            } catch (error) {
+                updateStatus(`Service Worker registration failed: ${error.message}`, 'error');
+                console.error('Service Worker registration error:', error);
+            }
+        }
+        
+        async function testCache() {
+            try {
+                const cacheNames = await caches.keys();
+                updateStatus(`Available caches: ${cacheNames.join(', ')}`, 'info');
+                
+                for (const cacheName of cacheNames) {
+                    const cache = await caches.open(cacheName);
+                    const keys = await cache.keys();
+                    updateStatus(`Cache "${cacheName}" contains ${keys.length} items`, 'info');
+                }
+            } catch (error) {
+                updateStatus(`Cache test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testPushNotification() {
+            try {
+                if (!('Notification' in window)) {
+                    updateStatus('Push notifications not supported', 'error');
+                    return;
+                }
+                
+                if (Notification.permission === 'denied') {
+                    updateStatus('Push notifications are denied', 'error');
+                    return;
+                }
+                
+                if (Notification.permission === 'default') {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') {
+                        updateStatus('Push notification permission denied', 'error');
+                        return;
+                    }
+                }
+                
+                new Notification('Test Notification', {
+                    body: 'This is a test notification from the service worker test page',
+                    icon: '/vite.svg'
+                });
+                
+                updateStatus('Test notification sent!', 'success');
+            } catch (error) {
+                updateStatus(`Push notification test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function clearCache() {
+            try {
+                const cacheNames = await caches.keys();
+                await Promise.all(cacheNames.map(cacheName => caches.delete(cacheName)));
+                updateStatus('All caches cleared', 'success');
+            } catch (error) {
+                updateStatus(`Failed to clear cache: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            updateStatus('Page loaded. Click "Test Service Worker Registration" to begin.', 'info');
+        });
+    </script>
+</body>
+</html>
