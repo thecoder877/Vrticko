@@ -41,3 +41,6 @@ build/
 
 # Vercel
 .vercel
+
+# SQL files
+*.sql
