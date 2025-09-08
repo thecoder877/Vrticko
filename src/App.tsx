@@ -26,20 +26,20 @@ const AppContent: React.FC = () => {
   const [isSigningOut, setIsSigningOut] = useState(false)
   
   // Initialize push notifications for real-time notifications
-  const { setupRealtimeNotifications, testNotification } = usePushNotifications()
+  const { setupRealtimeNotifications } = usePushNotifications()
   const [realtimeSetup, setRealtimeSetup] = useState(false)
 
   // Expose auth context to global window for debugging
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      (window as any).authContext = { user, signOut, loading, testNotification }
+      (window as any).authContext = { user, signOut, loading }
       console.log('Auth context exposed to window.authContext for debugging')
       
       // Also expose debug utilities
       ;(window as any).testSupabaseConnection = testSupabaseConnection
       ;(window as any).getCurrentUserInfo = getCurrentUserInfo
     }
-  }, [user, signOut, loading, testNotification])
+  }, [user, signOut, loading])
 
   // Setup real-time notifications when user is logged in
   useEffect(() => {
